@@ -10,12 +10,14 @@ import { useCallback, useRef, useState } from "react";
 import WebcamFaceLandmarker from "@/components/WebcamFaceLandmarker";
 import CalibrationDot from "@/components/CalibrationDot";
 import SessionSummaryCard from "@/components/SessionSummaryCard";
+import TestRegionResultView from "@/components/TestRegionResultView";
 
 import { usePointSequence } from "@/hooks/usePointSequence";
 import { exitFullscreen, useFullscreenGuard } from "@/hooks/useFullscreenGuard";
 
 import {
   FIXATION,
+  GAZE_REGION,
   PHYSICAL_SETUP,
   POINT_DURATION_MS,
   PRE_START_DELAY_MS,
@@ -27,6 +29,18 @@ import { buildCalibrationCsv, downloadCsv } from "@/lib/eyetracking/csv";
 import { FixationDetector } from "@/lib/eyetracking/fixation";
 import { computeSummary } from "@/lib/eyetracking/summary";
 import { formatSessionTime, shuffle } from "@/lib/eyetracking/utils";
+import {
+  buildTrainingSet,
+  parseTrainingSet,
+  readTrainingRaw,
+  saveTrainingSet,
+  trainGazeModel,
+} from "@/lib/gaze/training";
+import {
+  computeTestRegionResult,
+  physicalSetupOf,
+  type TestRegionResult,
+} from "@/lib/gaze/testResult";
 import type {
   CalibrationLayout,
   EyeTrackingFrame,
@@ -77,6 +91,17 @@ export default function CalibrationSession({ layout, prefill }: CalibrationSessi
   const [downloaded, setDownloaded] = useState(false);
   const [testGridHref, setTestGridHref] = useState<string | null>(null);
 
+  // Model gaze di browser (tidak memengaruhi CSV):
+  // - kalibrasi: data latih disimpan di sessionStorage untuk test grid & demo
+  // - test grid: hasil tebakan per titik dalam bentuk region
+  const [gazeNote, setGazeNote] = useState<string | null>(null);
+  const [regionResult, setRegionResult] = useState<{
+    result: TestRegionResult;
+    screenW: number;
+    screenH: number;
+  } | null>(null);
+  const [demoHref, setDemoHref] = useState<string | null>(null);
+
   // Satu detektor fixation untuk seluruh sesi (dibuat sekali).
   const [fixationDetector] = useState(() => new FixationDetector(FIXATION));
 
@@ -109,10 +134,44 @@ export default function CalibrationSession({ layout, prefill }: CalibrationSessi
       setTestGridHref(`/test-grid?${q.toString()}`);
     }
 
+    if (session) prepareGaze(session);
+
     // Ubah stage SEBELUM keluar layar penuh agar listener
     // fullscreenchange tidak menganggapnya pembatalan.
     changeStage("finished");
     exitFullscreen();
+  };
+
+  const prepareGaze = (session: SessionInfo) => {
+    if (!isTest) {
+      const set = buildTrainingSet(logRef.current, session.sessionId, session.layoutId);
+      setGazeNote(
+        saveTrainingSet(set)
+          ? null
+          : "Data latih untuk tampilan region tidak bisa disimpan di browser."
+      );
+      return;
+    }
+
+    const set = parseTrainingSet(readTrainingRaw(session.pairedSessionId));
+    const model = set ? trainGazeModel(set) : null;
+    if (!model) {
+      setGazeNote(
+        set
+          ? "Frame kalibrasi valid terlalu sedikit untuk melatih model region."
+          : "Hasil region tidak tersedia: data kalibrasi pasangan tidak ditemukan di tab ini. " +
+              "Jalankan kalibrasi lalu test grid di tab yang sama (lewat tombol \"Lanjut ke Test Grid\")."
+      );
+      return;
+    }
+
+    setRegionResult({
+      result: computeTestRegionResult(logRef.current, model, GAZE_REGION, physicalSetupOf(session)),
+      screenW: session.screenW,
+      screenH: session.screenH,
+    });
+    const q = new URLSearchParams({ cal: session.pairedSessionId, pid: session.participantId });
+    setDemoHref(`/gaze-demo?${q.toString()}`);
   };
 
   const sequence = usePointSequence({
@@ -233,6 +292,9 @@ export default function CalibrationSession({ layout, prefill }: CalibrationSessi
     setSummary(null);
     setDownloaded(false);
     setTestGridHref(null);
+    setGazeNote(null);
+    setRegionResult(null);
+    setDemoHref(null);
 
     changeStage("calibrating");
 
@@ -251,6 +313,9 @@ export default function CalibrationSession({ layout, prefill }: CalibrationSessi
     setMessage(null);
     setDownloaded(false);
     setTestGridHref(null);
+    setGazeNote(null);
+    setRegionResult(null);
+    setDemoHref(null);
     changeStage("setup");
   };
 
@@ -499,9 +564,14 @@ export default function CalibrationSession({ layout, prefill }: CalibrationSessi
           onReset={resetCalibration}
           resetLabel={`Ulangi ${sessionLabel}`}
           downloaded={downloaded}
-          nextHref={testGridHref ?? undefined}
-          nextLabel="Lanjut ke Test Grid"
-        />
+          nextHref={(isTest ? demoHref : testGridHref) ?? undefined}
+          nextLabel={isTest ? "Coba Demo Region" : "Lanjut ke Test Grid"}
+        >
+          {regionResult && <TestRegionResultView {...regionResult} />}
+          {gazeNote && (
+            <p className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{gazeNote}</p>
+          )}
+        </SessionSummaryCard>
       )}
     </main>
   );

@@ -59,9 +59,10 @@ export const CALIBRATION_POINTS_HV13: CalibrationPoint[] = [
 // TEST GRID (evaluasi, TIDAK dipakai untuk melatih model): grid 4x3.
 // x = 20/40/60/80%, y = 20/50/80%. Semua titik berada di dalam area kalibrasi
 // dan tidak sama dengan titik HV9/HV13 mana pun. Layout ini dipilih karena
-// jarak rata-rata ke titik kalibrasi terdekat SAMA untuk HV9 dan HV13 (3,2°
-// pada layar 31 cm, jarak 60 cm; minimal 2,9°), sehingga perbandingan
-// 9 vs 13 titik tidak bias ke salah satu layout.
+// jarak rata-rata ke titik kalibrasi terdekat SAMA untuk HV9 dan HV13, sehingga
+// perbandingan 9 vs 13 titik tidak bias ke salah satu layout.
+// Pada layar 35 cm (16:9): rata-rata 4,9° / 4,4° / 4,0° / 3,7° pada jarak
+// 45 / 50 / 55 / 60 cm (minimal 4,5° / 4,0° / 3,6° / 3,3°).
 export const TEST_POINTS_12: CalibrationPoint[] = [20, 50, 80].flatMap((y, row) =>
   [20, 40, 60, 80].map((x, col) => ({ id: row * 4 + col + 1, x, y }))
 );
@@ -97,13 +98,13 @@ export const POSE_CONDITION = "netral";
 export const PHYSICAL_SETUP = {
   // Lebar area tampilan layar (cm), diukur dengan penggaris.
   // Isi di sini jika semua partisipan memakai laptop yang sama.
-  // 31 cm = laptop 14" 16:9 (dari EDID panel AUO 31x17 cm). Pastikan dengan penggaris.
-  defaultScreenWidthCm: 31 as number | null,
-  // Protokol jarak mata ke layar (cm): peserta duduk di dalam rentang ini,
-  // jarak sebenarnya diukur dan dicatat per sesi (bukan nilai tengahnya).
-  // Catatan: jarak kerja Tobii Pro Spark 45-95 cm, jadi 45 cm adalah batas
-  // terdekatnya. Jika Tobii ikut merekam, pertimbangkan rentang 50-60 cm.
-  recommendedViewingDistanceCm: { min: 45, max: 55 },
+  // 35 cm = laptop penelitian ASUS Vivobook 16 (V3607VU), 16" 16:9, 1920x1080.
+  // Diukur dengan meteran: area layar menyala 35 x 20 cm.
+  defaultScreenWidthCm: 35 as number | null,
+  // Protokol jarak mata ke layar (cm): tiap peserta direkam di 45, 50, 55,
+  // dan 60 cm. Jarak sebenarnya diukur dan dicatat per sesi.
+  // Semua jarak masih di dalam jarak kerja Tobii Pro Spark (45-95 cm).
+  recommendedViewingDistanceCm: { min: 45, max: 60 },
   // Nilai awal di form (tengah rentang).
   defaultViewingDistanceCm: 50,
   // Rentang wajar untuk validasi input (di luar ini input ditolak).
@@ -127,4 +128,30 @@ export const FIXATION = {
   maxDeviationV: 0.008,
   // Jeda antarframe lebih dari ini memutus fixation (frame hilang).
   maxGapMs: 100,
+};
+
+// MODEL GAZE DI BROWSER (demo region & hasil test grid; TIDAK mengubah data CSV)
+// Hiperparameter Ridge DIKUNCI setelah pilot study (15 November 2026), sama
+// dengan gaze-model/models/pilot_params.json: degree 1 (linear), alpha 10.
+// Hanya Ridge linear yang bisa dilatih langsung di browser (lib/gaze/ridge.ts);
+// hasilnya sudah dicek identik dengan scikit-learn.
+// Data latih = frame kalibrasi fase "fixation" + face_valid (aturan A).
+export const GAZE_MODEL = {
+  degree: 1,
+  alpha: 10,
+};
+
+// REGION: layar dibagi kolom x baris. 4x2 dipilih dari data pilot
+// (gaze-model/pilot_study_analysis.ipynb bagian 12): grid dengan kotak
+// terbanyak yang tebakannya masih >= 75% benar (4x2 ~76%, 3x3 hanya ~62%,
+// karena arah atas-bawah jauh lebih sulit daripada kiri-kanan).
+export const GAZE_REGION = {
+  cols: 4,
+  rows: 2,
+  // Median tebakan selama waktu ini (ms) agar region tidak berkedip.
+  smoothingMs: 500,
+  // Minimal tebakan valid di dalam jendela sebelum region ditampilkan.
+  minSamples: 3,
+  // Jika tidak ada frame valid selama ini (ms), region dimatikan.
+  lostAfterMs: 700,
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { MIN_VALID_FIXATION_SAMPLES } from "@/lib/eyetracking/config";
 import type { SessionSummary } from "@/lib/eyetracking/types";
@@ -17,6 +18,8 @@ type SessionSummaryCardProps = {
   // karena data sesi hilang saat pindah halaman.
   nextHref?: string;
   nextLabel?: string;
+  // Konten tambahan di atas tombol (mis. hasil tebakan region pada test grid).
+  children?: ReactNode;
 };
 
 // Tampilan "... Selesai" beserta ringkasan per titik.
@@ -30,6 +33,7 @@ export default function SessionSummaryCard({
   downloaded,
   nextHref,
   nextLabel,
+  children,
 }: SessionSummaryCardProps) {
   // Peringatan memakai hitungan I-DT (lebih ketat dari hitungan berbasis waktu).
   const lowPoints = summary.points.filter(
@@ -134,6 +138,8 @@ export default function SessionSummaryCard({
             Pertimbangkan untuk mengulang sesi.
           </p>
         )}
+
+        {children}
 
         <div className="flex flex-wrap justify-center gap-3">
           <button

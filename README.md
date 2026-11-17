@@ -36,15 +36,17 @@ Untuk pengembangan (bukan pengambilan data), pakai `npm run dev`.
    Next.js yang bisa mengganggu peserta).
 2. Zoom browser 100% (**Ctrl + 0**).
 3. Ukur **lebar layar** laptop yang dipakai (area tampilan, tanpa bingkai) dan
-   **jarak mata–layar** (protokol 45–55 cm), lalu isi angka sebenarnya di form.
+   **jarak mata–layar** (protokol: 45, 50, 55, dan 60 cm per peserta), lalu isi angka sebenarnya di form.
 4. Pakai ID peserta baru dan unik (mis. `PL01`).
-5. Alur: `/calibration-13` → Download CSV → Lanjut ke Test Grid → Download CSV.
+5. Alur: `/calibration-13` → Download CSV → Lanjut ke Test Grid → Download CSV →
+   (opsional) Coba Demo Region. Semua langkah harus di **tab yang sama**.
 
 | Halaman | Layout | Titik |
 |---|---|---|
 | `/calibration` | HV9 | grid 3×3 (10/50/90%) |
 | `/calibration-13` | HV13 | grid 3×3 + 4 titik di (30,30), (70,30), (30,70), (70,70) |
 | `/test-grid` | TEST12 | **data uji**: grid 4×3, x = 20/40/60/80%, y = 20/50/80% |
+| `/gaze-demo` | – | demo region pandangan real-time (tidak merekam data) |
 
 **Test grid** dibuka lewat tombol "Lanjut ke Test Grid" di layar ringkasan
 kalibrasi (aktif setelah CSV kalibrasi diunduh). ID partisipan, lebar layar,
@@ -83,6 +85,9 @@ dan memiliki kolom `calibration_layout`.
 | `lib/eyetracking/gatekeeper.ts` | Validasi frame: posisi wajah, batas frame, kedipan |
 | `lib/eyetracking/csv.ts` | Skema kolom dan ekspor CSV |
 | `lib/mediapipe/` | Pemuatan model dan indeks landmark mata/iris |
+| `lib/gaze/` | Fitur gaze, Ridge linear, region, dan hasil test grid di browser |
+| `components/TestRegionResultView.tsx` | Hasil test grid dalam bentuk region |
+| `components/GazeRegionDemo.tsx` | Demo region real-time (`/gaze-demo`) |
 
 ## Catatan data
 
@@ -104,3 +109,24 @@ dan memiliki kolom `calibration_layout`.
 - Setup fisik `screen_width_cm` dan `viewing_distance_cm` dicatat per sesi untuk
   konversi error ke derajat sudut pandang:
   `deg = 2 * atan((err_px * screen_width_cm / screen_w) / (2 * viewing_distance_cm))`.
+
+## Tampilan region (model di browser)
+
+Tampilan ini hanya untuk umpan balik ke pengguna. **CSV penelitian tidak berubah.**
+
+1. Setelah kalibrasi selesai, fitur dan target frame latih (fase `fixation` +
+   `face_valid`, aturan A) disimpan di `sessionStorage` tab tersebut.
+2. Setelah test grid selesai, model **Ridge linear** (degree 1, alpha 10, sama
+   dengan `gaze-model/models/pilot_params.json` yang dikunci 15 November 2026)
+   dilatih di browser. Lalu ditampilkan:
+   - peta tebakan per titik test dalam bentuk region (benar = tebakan di dalam
+     kotak seukuran 1 region yang berpusat di target), dan
+   - error rata-rata dalam derajat.
+3. Tombol **Coba Demo Region** membuka `/gaze-demo`: layar dibagi menjadi
+   region, dan region yang sedang dilihat menyala (median tebakan 0,5 detik
+   agar tidak berkedip).
+
+Fitur dan model di browser sudah dicek **identik** dengan `gaze_pipeline.py` /
+scikit-learn pada data pilot (selisih < 1e-13). Ukuran grid diatur di
+`GAZE_REGION` (`lib/eyetracking/config.ts`). Default **4×2** dipilih dari data
+pilot (notebook bagian 12).
